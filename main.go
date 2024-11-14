@@ -5,14 +5,18 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/spf13/viper"
 	"io"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"path"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -34,9 +38,10 @@ var opFlags struct {
 	IndexerAddrs        []string
 	IndexerMaxNeighbors uint
 
-	LeechMaxN          int
-	BootstrappingNodes []string
-	FilterNodesCIDRs   []net.IPNet
+	LeechMaxN              int
+	BootstrappingNodes     []string
+	BootstrapNodesSelfPort bool
+	FilterNodesCIDRs       []net.IPNet
 
 	Addr string
 
@@ -91,7 +96,7 @@ func main() {
 		return
 	}
 
-	trawlingManager := dht.NewManager(opFlags.IndexerAddrs, opFlags.IndexerMaxNeighbors, opFlags.BootstrappingNodes, opFlags.FilterNodesCIDRs)
+	trawlingManager := dht.NewManager(opFlags.IndexerAddrs, opFlags.IndexerMaxNeighbors, opFlags.BootstrappingNodes, opFlags.BootstrapNodesSelfPort, opFlags.FilterNodesCIDRs)
 	metadataSink := metadata.NewSink(5*time.Second, opFlags.LeechMaxN, opFlags.FilterNodesCIDRs)
 
 	// The Event Loop
@@ -121,26 +126,64 @@ func main() {
 
 func parseFlags() error {
 	var cmdF struct {
-		DatabaseURL string `long:"database" description:"URL of the database." default:"postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable"`
+		RunWithConfigFile bool   `long:"with-config-file" description:"Run using yaml configuration file."`
+		ConfigFilePath    string `long:"config-file-path" description:"Configuration file path. If not filled in, it will default to config.yml in the same directory of this program."`
 
-		IndexerAddrs        []string `long:"indexer-addr" description:"Address(es) to be used by indexing DHT nodes." default:"0.0.0.0:0"`
-		IndexerMaxNeighbors uint     `long:"indexer-max-neighbors" description:"Maximum number of neighbors of an indexer." default:"5000"`
+		DatabaseURL string `long:"database" description:"URL of the database." default:"postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable" mapstructure:"databaseURL"`
 
-		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"1000"`
-		MaxRPS    uint `long:"max-rps" description:"Maximum requests per second." default:"500"`
+		IndexerAddrs        []string `long:"indexer-addr" description:"Address(es) to be used by indexing DHT nodes." default:"0.0.0.0:0" mapstructure:"indexerAddrs"`
+		IndexerMaxNeighbors uint     `long:"indexer-max-neighbors" description:"Maximum number of neighbors of an indexer." default:"5000" mapstructure:"indexerMaxNeighbors"`
 
-		BootstrappingNodes []string `long:"bootstrap-node" description:"Host(s) to be used for bootstrapping." default:"dht.tgragnato.it"`
-		FilterNodesCIDRs   []string `long:"filter-nodes-cidrs" description:"List of CIDRs on which Magnetico can operate. Empty is open mode." default:""`
+		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"1000" mapstructure:"leechMaxN"`
+		MaxRPS    uint `long:"max-rps" description:"Maximum requests per second." default:"500" mapstructure:"maxRPS"`
 
-		Addr string `short:"a" long:"addr"        description:"Address (host:port) to serve on" default:"[::1]:8080"`
-		Cred string `short:"c" long:"credentials" description:"Path to the credentials file" default:""`
+		BootstrappingNodes     []string `long:"bootstrap-node" description:"Host(s) to be used for bootstrapping." default:"dht.tgragnato.it" mapstructure:"bootstrappingNodes"`
+		BootstrapNodesSelfPort bool     `long:"is-bootstrap-node-self-port" description:"Customize the port of the boot host(s)." mapstructure:"bootstrapNodesSelfPort"`
+		FilterNodesCIDRs       []string `long:"filter-nodes-cidrs" description:"List of CIDRs on which Magnetico can operate. Empty is open mode." default:"" mapstructure:"filterNodesCIDRs"`
 
-		RunDaemon bool `short:"d" long:"daemon" description:"Run the crawler without the web interface."`
-		RunWeb    bool `short:"w" long:"web"    description:"Run the web interface without the crawler."`
+		Addr string `short:"a" long:"addr"        description:"Address (host:port) to serve on" default:"[::1]:8080" mapstructure:"addr"`
+		Cred string `short:"c" long:"credentials" description:"Path to the credentials file" default:"" mapstructure:"cred"`
+
+		RunDaemon bool `short:"d" long:"daemon" description:"Run the crawler without the web interface." mapstructure:"runDaemon"`
+		RunWeb    bool `short:"w" long:"web"    description:"Run the web interface without the crawler." mapstructure:"runWeb"`
 	}
 
 	if _, err := flags.Parse(&cmdF); err != nil {
 		return err
+	}
+
+	if cmdF.RunWithConfigFile {
+
+		if cmdF.ConfigFilePath == "" {
+			execPath, err := os.Executable()
+			if err != nil {
+				return err
+			}
+			execPath, err = filepath.Abs(execPath)
+			if err != nil {
+				return err
+			}
+			cmdF.ConfigFilePath = path.Join(filepath.Dir(execPath), "config.yml")
+		}
+		configFilePath := cmdF.ConfigFilePath
+		configFileNameWithSuffix := path.Base(configFilePath)
+		configFileType := path.Ext(configFileNameWithSuffix)
+		configFileNameOnly := strings.TrimSuffix(configFileNameWithSuffix, configFileType)
+		vip := viper.New()
+		vip.SetConfigName(configFileNameOnly)
+		vip.SetConfigType(configFileType[1:])
+		vip.AddConfigPath(filepath.Dir(configFilePath))
+		err := vip.ReadInConfig()
+		if err != nil {
+			return err
+		}
+		err = vip.Unmarshal(&cmdF)
+		if err != nil {
+			return err
+		}
+		_ = vip.MergeConfigMap(vip.AllSettings())
+
+		// return nil
 	}
 
 	if cmdF.RunDaemon && !cmdF.RunWeb {
@@ -185,6 +228,8 @@ func parseFlags() error {
 
 		mainline.DefaultThrottleRate = int(cmdF.MaxRPS)
 		opFlags.BootstrappingNodes = cmdF.BootstrappingNodes
+
+		opFlags.BootstrapNodesSelfPort = cmdF.BootstrapNodesSelfPort
 
 		opFlags.FilterNodesCIDRs = []net.IPNet{}
 		for _, cidr := range cmdF.FilterNodesCIDRs {
