@@ -3,7 +3,7 @@ package rabbitmq_reconnect
 import (
 	"crypto/tls"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"go.uber.org/zap"
+	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -11,8 +11,9 @@ import (
 )
 
 //需要全局zap日志
+//Requires global zap log
 
-var ReconnectDelay = time.Second * 3 // 重连时间间隔
+var ReconnectDelay = time.Second * 3 // 重连时间间隔 Reconnection interval
 
 type Connection struct {
 	*amqp.Connection
@@ -37,11 +38,12 @@ func DialConfig(url string, config amqp.Config) (*Connection, error) {
 			// exit this goroutine if closed by developer
 			if !ok {
 				// zap.S().Debugf("connection closed")
-				zap.S().Debugf("connection closed")
+				log.Println("connection closed")
 				break
 			}
 
-			zap.S().Debugf("connection closed, reason: %s", reason)
+			// zap.S().Debugf("connection closed, reason: %s", reason)
+			log.Printf("connection closed, reason: %s\n", reason)
 
 			for {
 				// wait 1s for reconnect
@@ -49,7 +51,8 @@ func DialConfig(url string, config amqp.Config) (*Connection, error) {
 
 				conn, err := amqp.Dial(url)
 				if err != nil {
-					zap.S().Debugf("reconnect failed, err: %v", err)
+					// zap.S().Debugf("reconnect failed, err: %v", err)
+					log.Printf("reconnect failed, err: %v", err)
 					continue
 				}
 
@@ -57,7 +60,8 @@ func DialConfig(url string, config amqp.Config) (*Connection, error) {
 				c.Connection = conn
 				c.mutex.Unlock()
 
-				zap.S().Debugf("reconnect success")
+				// zap.S().Debugf("reconnect success")
+				log.Println("reconnect success")
 				break
 			}
 		}
@@ -82,20 +86,22 @@ func Dial(url string) (*Connection, error) {
 			reason, ok := <-c.Connection.NotifyClose(make(chan *amqp.Error))
 			// exit this goroutine if closed by developer
 			if !ok {
-				zap.S().Debugf("connection closed")
+				// zap.S().Debugf("connection closed")
+				log.Println("connection closed")
 				break
 			}
 
-			zap.S().Debugf("connection closed, reason: %s", reason)
+			// zap.S().Debugf("connection closed, reason: %s", reason)
+			log.Printf("connection closed, reason: %s", reason)
 
 			// reconnect if not closed by developer
 			for {
-				// wait 1s for reconnect
 				time.Sleep(ReconnectDelay)
 
 				conn, err := amqp.Dial(url)
 				if err != nil {
-					zap.S().Debugf("reconnect failed, err: %v", err)
+					// zap.S().Debugf("reconnect failed, err: %v", err)
+					log.Printf("reconnect failed, err: %v", err)
 					continue
 				}
 
@@ -103,7 +109,8 @@ func Dial(url string) (*Connection, error) {
 				c.Connection = conn
 				c.mutex.Unlock()
 
-				zap.S().Debugf("reconnect success")
+				// zap.S().Debugf("reconnect success")
+				log.Printf("reconnect success")
 				break
 			}
 		}
@@ -131,25 +138,28 @@ func (c *Connection) Channel() (*Channel, error) {
 			reason, ok := <-channel.Channel.NotifyClose(make(chan *amqp.Error))
 			// exit this goroutine if closed by developer
 			if !ok || channel.isClosed() {
-				zap.S().Debugf("channel closed")
+				// zap.S().Debugf("channel closed")
+				log.Println("channel closed")
 				channel.Close() // close again, ensure closed flag set when connection closed
 				break
 			}
-			zap.S().Debugf("channel closed, reason: %v", reason)
+			// zap.S().Debugf("channel closed, reason: %v", reason)
+			log.Printf("channel closed, reason: %v", reason)
 
 			// reconnect if not closed by developer
 			for {
-				// wait 1s for connection reconnect
 				time.Sleep(ReconnectDelay) // Retry interval: Exponential backoff #2
 
 				if c.Connection.IsClosed() {
-					zap.S().Debugf("channel recreate failed, connection still closed")
+					// zap.S().Debugf("channel recreate failed, connection still closed")
+					log.Printf("channel recreate failed, connection still closed")
 					continue
 				}
 
 				ch, err := c.Connection.Channel()
 				if err != nil {
-					zap.S().Debugf("channel recreate failed, err: %s", err)
+					// zap.S().Debugf("channel recreate failed, err: %s", err)
+					log.Printf("channel recreate failed, err: %s", err)
 					continue
 				}
 
@@ -159,11 +169,13 @@ func (c *Connection) Channel() (*Channel, error) {
 
 					if err != nil {
 						ch.Close()
-						zap.S().Debugf("channel recreate failed, unable to restore qos settings, err: %s (prefetch_count: %d; prefetch_size: %d; global: %t)", err, channel.qos.prefetchCount, channel.qos.prefetchSize, channel.qos.global)
+						// zap.S().Debugf("channel recreate failed, unable to restore qos settings, err: %s (prefetch_count: %d; prefetch_size: %d; global: %t)", err, channel.qos.prefetchCount, channel.qos.prefetchSize, channel.qos.global)
+						log.Printf("channel recreate failed, unable to restore qos settings, err: %s (prefetch_count: %d; prefetch_size: %d; global: %t)", err, channel.qos.prefetchCount, channel.qos.prefetchSize, channel.qos.global)
 						continue
 					}
 
-					zap.S().Debugf("qos restored (prefetch_count: %d; prefetch_size: %d; global: %t)", channel.qos.prefetchCount, channel.qos.prefetchSize, channel.qos.global)
+					// zap.S().Debugf("qos restored (prefetch_count: %d; prefetch_size: %d; global: %t)", channel.qos.prefetchCount, channel.qos.prefetchSize, channel.qos.global)
+					log.Printf("qos restored (prefetch_count: %d; prefetch_size: %d; global: %t)", channel.qos.prefetchCount, channel.qos.prefetchSize, channel.qos.global)
 				}
 
 				// We need to restore auto deleted queues created with this channel
@@ -178,12 +190,14 @@ func (c *Connection) Channel() (*Channel, error) {
 					}
 
 					if err != nil {
-						zap.S().Debugf("channel recreate failed, unable to restore auto deleted queue, err: %v (name: %s; durable: %t; auto_delete: %t; exclusive: %t; no_wait: %t; passive: %t)", err, q.name, q.durable, q.autoDelete, q.exclusive, q.noWait, q.passive)
+						// zap.S().Debugf("channel recreate failed, unable to restore auto deleted queue, err: %v (name: %s; durable: %t; auto_delete: %t; exclusive: %t; no_wait: %t; passive: %t)", err, q.name, q.durable, q.autoDelete, q.exclusive, q.noWait, q.passive)
+						log.Printf("channel recreate failed, unable to restore auto deleted queue, err: %v (name: %s; durable: %t; auto_delete: %t; exclusive: %t; no_wait: %t; passive: %t)", err, q.name, q.durable, q.autoDelete, q.exclusive, q.noWait, q.passive)
 						queuesRestored = false
 						break
 					}
 
-					zap.S().Debugf("queue restored (name: %s; durable: %t; auto_delete: %t; exclusive: %t; no_wait: %t; passive: %t)", q.name, q.durable, q.autoDelete, q.exclusive, q.noWait, q.passive)
+					// zap.S().Debugf("queue restored (name: %s; durable: %t; auto_delete: %t; exclusive: %t; no_wait: %t; passive: %t)", q.name, q.durable, q.autoDelete, q.exclusive, q.noWait, q.passive)
+					log.Printf("queue restored (name: %s; durable: %t; auto_delete: %t; exclusive: %t; no_wait: %t; passive: %t)", q.name, q.durable, q.autoDelete, q.exclusive, q.noWait, q.passive)
 				}
 
 				if !queuesRestored {
@@ -201,12 +215,14 @@ func (c *Connection) Channel() (*Channel, error) {
 					}
 
 					if err != nil {
-						zap.S().Debugf("channel recreate failed, unable to restore auto deleted exchange, err: %v (name: %s; kind: %s; durable: %t; auto_delete: %t; internal: %t; no_wait: %t)", err, e.name, e.kind, e.durable, e.autoDelete, e.internal, e.noWait)
+						// zap.S().Debugf("channel recreate failed, unable to restore auto deleted exchange, err: %v (name: %s; kind: %s; durable: %t; auto_delete: %t; internal: %t; no_wait: %t)", err, e.name, e.kind, e.durable, e.autoDelete, e.internal, e.noWait)
+						log.Printf("channel recreate failed, unable to restore auto deleted exchange, err: %v (name: %s; kind: %s; durable: %t; auto_delete: %t; internal: %t; no_wait: %t)", err, e.name, e.kind, e.durable, e.autoDelete, e.internal, e.noWait)
 						exchangesRestored = false
 						break
 					}
 
-					zap.S().Debugf("exchange restored (name: %s; kind: %s; durable: %t; auto_delete: %t; internal: %t; no_wait: %t)", e.name, e.kind, e.durable, e.autoDelete, e.internal, e.noWait)
+					// zap.S().Debugf("exchange restored (name: %s; kind: %s; durable: %t; auto_delete: %t; internal: %t; no_wait: %t)", e.name, e.kind, e.durable, e.autoDelete, e.internal, e.noWait)
+					log.Printf("exchange restored (name: %s; kind: %s; durable: %t; auto_delete: %t; internal: %t; no_wait: %t)", e.name, e.kind, e.durable, e.autoDelete, e.internal, e.noWait)
 				}
 
 				if !exchangesRestored {
@@ -218,7 +234,8 @@ func (c *Connection) Channel() (*Channel, error) {
 
 				for _, b := range channel.autoDeletedQueueBindings {
 					if err := ch.QueueBind(b.queueName, b.key, b.exchangeName, b.noWait, b.args); err != nil {
-						zap.S().Debugf("channel recreate failed, unable to restore auto deleted queue or exchange binding, err: %v")
+						// zap.S().Debugf("channel recreate failed, unable to restore auto deleted queue or exchange binding, err: %v")
+						log.Printf("channel recreate failed, unable to restore auto deleted queue or exchange binding, err: %v\n", err)
 						bindingsRestored = false
 						break
 					}
@@ -233,7 +250,8 @@ func (c *Connection) Channel() (*Channel, error) {
 				channel.Channel = ch // Concurrency?
 				channel.mutex.Unlock()
 
-				zap.S().Debugf("channel recreate success")
+				// zap.S().Debugf("channel recreate success")
+				log.Println("channel recreate success")
 
 				break
 			}
