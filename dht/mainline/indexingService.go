@@ -3,9 +3,11 @@ package mainline
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"log"
 	mrand "math/rand"
 	"net"
 	"reflect"
+	"strconv"
 	"time"
 
 	"tgragnato.it/magnetico/stats"
@@ -23,7 +25,8 @@ type IndexingService struct {
 	counter          uint16
 	getPeersRequests map[[2]byte][20]byte // GetPeersQuery.`t` -> infohash
 
-	bootstrapNodes []string
+	bootstrapNodes         []string
+	bootstrapNodesSelfPort bool //这里控制是否开启自定义bootstrapNodes的端口
 }
 
 type IndexingServiceEventHandlers struct {
@@ -43,7 +46,7 @@ func (ir IndexingResult) PeerAddrs() []net.TCPAddr {
 	return ir.peerAddrs
 }
 
-func NewIndexingService(laddr string, maxNeighbors uint, eventHandlers IndexingServiceEventHandlers, bootstrapNodes []string, filterNodes []net.IPNet) *IndexingService {
+func NewIndexingService(laddr string, maxNeighbors uint, eventHandlers IndexingServiceEventHandlers, bootstrapNodes []string, bootstrapNodesSelfPort bool, filterNodes []net.IPNet) *IndexingService {
 	service := new(IndexingService)
 	service.protocol = NewProtocol(
 		laddr,
@@ -66,6 +69,7 @@ func NewIndexingService(laddr string, maxNeighbors uint, eventHandlers IndexingS
 
 	service.getPeersRequests = make(map[[2]byte][20]byte)
 	service.bootstrapNodes = bootstrapNodes
+	service.bootstrapNodesSelfPort = bootstrapNodesSelfPort
 
 	return service
 }
@@ -98,19 +102,57 @@ func (is *IndexingService) index() {
 func (is *IndexingService) bootstrap() {
 	bootstrappingPorts := []int{80, 443, 1337, 6969, 6881, 25401}
 	bootstrappingIPs := make([]net.IP, 0)
+	bootstrappingSelfPorts := make([]int, 0) //自定义启动地址的端口
+
 	for _, dnsName := range is.bootstrapNodes {
+
+		if is.bootstrapNodesSelfPort {
+
+			dnsNameHost, dnsNamePort, err := net.SplitHostPort(dnsName)
+			if err != nil {
+				log.Printf("an error occurred while parsing BootstrappingNodes: %s\n", err.Error())
+				continue
+			}
+
+			ipAddrsPort, _ := strconv.Atoi(dnsNamePort)
+
+			if ipAddrs, err := net.LookupIP(dnsNameHost); err == nil {
+				for _, ipAddr := range ipAddrs {
+					bootstrappingIPs = append(bootstrappingIPs, ipAddr)
+					bootstrappingSelfPorts = append(bootstrappingSelfPorts, ipAddrsPort)
+				}
+			}
+			continue
+		}
+
 		if ipAddrs, err := net.LookupIP(dnsName); err == nil {
 			bootstrappingIPs = append(bootstrappingIPs, ipAddrs...)
 		}
 	}
+
 	if len(bootstrappingIPs) == 0 {
 		return
 	}
 
 	go stats.GetInstance().IncBootstrap()
 
+	if is.bootstrapNodesSelfPort {
+		bootstrappingPorts = bootstrappingSelfPorts
+		for k, ip := range bootstrappingIPs {
+			log.Printf("bootstrappingNode info: Host: %s, Port: %v \n", ip, bootstrappingSelfPorts[k])
+			go is.protocol.SendMessage(
+				NewFindNodeQuery(is.nodeID, randomNodeID()),
+				&net.UDPAddr{
+					IP:   ip,
+					Port: bootstrappingSelfPorts[k],
+				})
+		}
+		return
+	}
+
 	for _, ip := range bootstrappingIPs {
 		for _, port := range bootstrappingPorts {
+			log.Printf("bootstrappingNode info: Host: %s, Port: %v \n", ip, port)
 			go is.protocol.SendMessage(
 				NewFindNodeQuery(is.nodeID, randomNodeID()),
 				&net.UDPAddr{IP: ip, Port: port},
