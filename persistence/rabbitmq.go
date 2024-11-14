@@ -8,12 +8,12 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
 	"net/url"
-	"sync"
 	amqpadvanced "tgragnato.it/magnetico/rabbitmq_reconnect"
 	"time"
 )
 
 type rabbitMQ struct {
+	// todo: This is just a simple use now, you need to be able to customize it later.
 	conn     *amqp.Connection
 	ch       *amqp.Channel
 	exchange string
@@ -21,11 +21,10 @@ type rabbitMQ struct {
 
 	dataQueue amqp.Queue
 
-	ReconnectDelay time.Duration
+	ReconnectDelay time.Duration //todo: In the future, the reconnection interval of the rabbitmq queue will be controlled here.
 
 	globalCtx        context.Context
 	globalCtxCanFunc context.CancelFunc
-	sync.Mutex
 }
 
 func makeRabbitMQ(url_ *url.URL) (Database, error) {
@@ -107,9 +106,6 @@ func (r *rabbitMQ) AddNewTorrent(infoHash []byte, name string, files []File) err
 	if dataSize > 4708106 {
 		return errors.New("encode data exceeds maximum 4708106")
 	}
-
-	r.Lock()
-	defer r.Unlock()
 
 	publishCtx, canCtx := context.WithTimeout(r.globalCtx, 5*time.Second)
 	defer canCtx()
