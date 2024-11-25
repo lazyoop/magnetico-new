@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
 	"time"
 
 	"github.com/jessevdk/go-flags"
@@ -26,14 +27,17 @@ import (
 	"tgragnato.it/magnetico/metadata"
 	"tgragnato.it/magnetico/persistence"
 	"tgragnato.it/magnetico/stats"
+	"tgragnato.it/magnetico/storage"
 	"tgragnato.it/magnetico/web"
 )
 
 var opFlags struct {
-	RunDaemon bool
-	RunWeb    bool
+	RunDaemon  bool
+	RunWeb     bool
+	RunStorage bool
 
-	DatabaseURL string
+	QueueServiceUrl string
+	DatabaseURL     string
 
 	IndexerAddrs        []string
 	IndexerMaxNeighbors uint
@@ -91,6 +95,20 @@ func main() {
 		go web.StartWeb(opFlags.Addr, opFlags.Credentials, database)
 	}
 
+	var persistentStorage storage.PersistentStorageServer
+	if opFlags.RunStorage {
+		persistentStorage = storage.StartPersistentStorage(opFlags.QueueServiceUrl, opFlags.DatabaseURL)
+		if persistentStorage == nil {
+			return
+		}
+		_ = persistentStorage.HandlerTorrent()
+	}
+	defer func() {
+		if err = persistentStorage.Close(); err != nil {
+			log.Printf("Could not close MQ! %s\n", err.Error())
+		}
+	}()
+
 	if !opFlags.RunDaemon {
 		<-interruptChan
 		return
@@ -129,7 +147,8 @@ func parseFlags() error {
 		RunWithConfigFile bool   `long:"with-config-file" description:"Run using yaml configuration file."`
 		ConfigFilePath    string `long:"config-file-path" description:"Configuration file path. If not filled in, it will default to config.yml in the same directory of this program."`
 
-		DatabaseURL string `long:"database" description:"URL of the database." default:"postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable" mapstructure:"databaseURL"`
+		QueueServiceUrl string `long:"mq" description:"Queue server URL.Get data from the queue server for persistence.Valid when the storage parameter is used." mapstructure:"queueServiceURL"`
+		DatabaseURL     string `long:"database" description:"URL of the Persistent database." default:"postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable" mapstructure:"databaseURL"`
 
 		IndexerAddrs        []string `long:"indexer-addr" description:"Address(es) to be used by indexing DHT nodes." default:"0.0.0.0:0" mapstructure:"indexerAddrs"`
 		IndexerMaxNeighbors uint     `long:"indexer-max-neighbors" description:"Maximum number of neighbors of an indexer." default:"5000" mapstructure:"indexerMaxNeighbors"`
@@ -144,8 +163,9 @@ func parseFlags() error {
 		Addr string `short:"a" long:"addr"        description:"Address (host:port) to serve on" default:"[::1]:8080" mapstructure:"addr"`
 		Cred string `short:"c" long:"credentials" description:"Path to the credentials file" default:"" mapstructure:"cred"`
 
-		RunDaemon bool `short:"d" long:"daemon" description:"Run the crawler without the web interface." mapstructure:"runDaemon"`
-		RunWeb    bool `short:"w" long:"web"    description:"Run the web interface without the crawler." mapstructure:"runWeb"`
+		RunDaemon  bool `short:"d" long:"daemon" description:"Run the crawler without the web interface." mapstructure:"runDaemon"`
+		RunWeb     bool `short:"w" long:"web"    description:"Run the web interface without the crawler." mapstructure:"runWeb"`
+		RunStorage bool `short:"s" long:"storage" description:"Fetch and persist storage from the queue.You need to set both mq and database parameters" mapstructure:"runStorage"`
 	}
 
 	if _, err := flags.Parse(&cmdF); err != nil {
@@ -193,10 +213,19 @@ func parseFlags() error {
 		opFlags.RunDaemon = false
 		opFlags.RunWeb = true
 	} else {
-		opFlags.RunDaemon = true
-		opFlags.RunWeb = true
+		opFlags.RunDaemon = false
+		opFlags.RunWeb = false
 	}
 
+	if cmdF.RunStorage {
+		opFlags.RunDaemon = false
+		opFlags.RunWeb = false
+		opFlags.RunStorage = true
+	} else {
+		opFlags.RunStorage = false
+	}
+
+	opFlags.QueueServiceUrl = cmdF.QueueServiceUrl
 	opFlags.DatabaseURL = cmdF.DatabaseURL
 
 	if opFlags.RunWeb {
