@@ -67,7 +67,7 @@ func main() {
 	}
 
 	// zap log
-	logger := utils.NewZapLog(zap.InfoLevel, false)
+	logger := utils.NewZapLog(opFlags.LogLevel, opFlags.IsDevEnv)
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
