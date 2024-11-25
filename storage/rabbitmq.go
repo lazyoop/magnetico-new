@@ -11,14 +11,16 @@ import (
 )
 
 type rabbitMQ struct {
-	mqUrl string
-	conn  *amqp.Connection
-	ch    *amqp.Channel
-
+	//queue
+	mqUrl       *url.URL
+	conn        *amqp.Connection
+	ch          *amqp.Channel
 	consumeQos  *consumeQos
 	consumeChan *<-chan amqp.Delivery
 
-	rDBMS rDBMSDatabase
+	// necessary sql db
+	sqlUrl *url.URL
+	sqlDB
 
 	sync.Mutex
 	signal
@@ -30,11 +32,6 @@ type consumeQos struct {
 	global        bool
 }
 
-type rDBMSDatabase struct {
-	rDBMSDsn *url.URL
-	RDBMSDatabase
-}
-
 type signal struct {
 	iStop             context.Context    // exit all goroutine
 	terminationSignal context.CancelFunc // called in Close()
@@ -44,25 +41,26 @@ func makeRabbitMQ(mqUrl_, sqlUrl_ *url.URL) (PersistentStorageServer, error) {
 	var err error
 
 	r := new(rabbitMQ)
-	r.rDBMS.RDBMSDatabase = new(postgresDatabase)
-	r.mqUrl = mqUrl_.String()
-	if err = r.connectMQ(); err != nil {
-		return nil, err
-	}
-	r.rDBMS.rDBMSDsn = sqlUrl_
-	if err = r.connectRDBMS(); err != nil {
-		return nil, err
-	}
+	r.iStop, r.terminationSignal = context.WithCancel(context.Background())
 
+	//connect Queue
+	r.mqUrl = mqUrl_
+	if err = r.connectQueue(); err != nil {
+		return nil, err
+	}
 	r.statusListen()
 
-	r.iStop, r.terminationSignal = context.WithCancel(context.Background())
+	// connect SQL DB
+	r.sqlDB.sqlUrl = sqlUrl_
+	if err = r.sqlDB.connectSqlDB(); err != nil {
+		return nil, err
+	}
 
 	return r, nil
 }
 
-func (r *rabbitMQ) connectMQ() (err error) {
-	r.conn, err = amqp.Dial(r.mqUrl)
+func (r *rabbitMQ) connectQueue() (err error) {
+	r.conn, err = amqp.Dial(r.mqUrl.String())
 	if err != nil {
 		return
 	}
@@ -84,21 +82,13 @@ func (r *rabbitMQ) connectMQ() (err error) {
 	}
 	r.consumeChan = new(<-chan amqp.Delivery)
 	*r.consumeChan, err = r.ch.Consume("magnetico",
-		"test1",
+		"storage",
 		false,
 		false,
 		false,
 		false,
 		amqp.Table{})
 
-	return
-}
-
-func (r *rabbitMQ) connectRDBMS() (err error) { //todo: multiple RDBMS databases are supported
-	r.rDBMS.RDBMSDatabase, err = newRDBMS(r.rDBMS.rDBMSDsn)
-	if err != nil {
-		return err
-	}
 	return
 }
 
@@ -132,7 +122,7 @@ func (r *rabbitMQ) handlerTorrent() {
 				continue
 			}
 			log.Printf("consume msg: %s", msgContent)
-			err = r.rDBMS.AddNewTorrent([]byte(torrentInfo.InfoHash), torrentInfo.Name, torrentInfo.Files)
+			err = r.sqlDB.AddNewTorrent([]byte(torrentInfo.InfoHash), torrentInfo.Name, torrentInfo.Files)
 			if err != nil {
 				log.Printf(err.Error())
 				_ = xp.Nack(false, true)
@@ -162,8 +152,8 @@ func (r *rabbitMQ) statusListen() {
 				rq.Lock()
 
 				if r.ch.IsClosed() || r.conn.IsClosed() {
-					if err := r.connectMQ(); err != nil {
 						log.Printf("Automatic reconnection to MQ server failed: " + err.Error())
+					if err := r.connectQueue(); err != nil {
 					} else {
 						log.Printf("Successfully reconnected to MQ Server")
 					}
@@ -180,7 +170,7 @@ func (r *rabbitMQ) statusListen() {
 
 }
 
-func (r *rabbitMQ) Engine() mqEngine {
+func (r *rabbitMQ) Engine() queueEngine {
 	return RabbitMQ
 }
 
@@ -198,7 +188,7 @@ func (r *rabbitMQ) Close() (err error) {
 		return err
 	}
 
-	if err = r.rDBMS.Close(); err != nil {
+	if err = r.sqlDB.Close(); err != nil {
 		return err
 	}
 

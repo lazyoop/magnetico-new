@@ -9,14 +9,13 @@ import (
 )
 
 type PersistentStorageServer interface {
-	Engine() mqEngine
+	Engine() queueEngine
 	HandlerTorrent() error
 	Close() error
-	statusListen()
 }
 
-type RDBMSDatabase interface {
-	Engine() databaseEngine
+type sqlDatabase interface {
+	Engine() sqlDatabaseEngine
 	DoesTorrentExist(infoHash []byte) (bool, error)
 	AddNewTorrent(infoHash []byte, name string, files []File) error
 	Close() error   // Exit the SQL Service link after the security is closed
@@ -62,15 +61,15 @@ const (
 
 // TODO: search `swtich (orderBy)` and see if all cases are covered all the time
 
-type databaseEngine uint8
-type mqEngine databaseEngine
+type sqlDatabaseEngine uint8
+type queueEngine sqlDatabaseEngine
 
 const (
-	Postgres databaseEngine = iota + 1
+	Postgres sqlDatabaseEngine = iota + 1
 )
 
 const (
-	RabbitMQ mqEngine = iota + 1
+	RabbitMQ queueEngine = iota + 1
 )
 
 type Statistics struct {
@@ -111,8 +110,8 @@ func (tm *TorrentMetadata) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func MakePersistentStorageServer(rawMqURL, rawSqlURL string) (PersistentStorageServer, error) {
-	mqUrl_, err := url.Parse(rawMqURL)
+func MakePersistentStorageServer(rawQueueURL, rawSqlURL string) (PersistentStorageServer, error) {
+	queueUrl_, err := url.Parse(rawQueueURL)
 	if err != nil {
 		return nil, errors.New("url.Parse: MQ URL: " + err.Error())
 	}
@@ -121,13 +120,13 @@ func MakePersistentStorageServer(rawMqURL, rawSqlURL string) (PersistentStorageS
 		return nil, errors.New("url.Parse: SQL URL: " + err.Error())
 	}
 
-	switch mqUrl_.Scheme {
+	switch queueUrl_.Scheme {
 
 	case "amqp", "amqps":
-		return makeRabbitMQ(mqUrl_, sqlUrl_)
+		return makeRabbitMQ(queueUrl_, sqlUrl_)
 
 	default:
-		return nil, fmt.Errorf("unknown MQ URI scheme: `%s`", mqUrl_.Scheme)
+		return nil, fmt.Errorf("unknown MQ URI scheme: `%s`", queueUrl_.Scheme)
 	}
 }
 
@@ -137,4 +136,24 @@ func NewStatistics() (s *Statistics) {
 	s.NFiles = make(map[string]uint64)
 	s.TotalSize = make(map[string]uint64)
 	return
+}
+
+// sqlDB : It is used in queue GO code to link SQL services.
+type sqlDB struct {
+	sqlUrl *url.URL
+	sqlDatabase
+}
+
+// connectSqlDB : It is used in queue GO code to link SQL services.
+func (s *sqlDB) connectSqlDB() (err error) {
+	switch s.sqlUrl.Scheme {
+	case "postgres", "cockroach":
+		s.sqlDatabase, err = newPostgresDB(s.sqlUrl)
+		if err != nil {
+			return err
+		}
+		return nil
+	default:
+		return errors.New("unknown SQL DB")
+	}
 }

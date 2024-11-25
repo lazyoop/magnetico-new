@@ -27,7 +27,7 @@ type postgresDatabase struct {
 	sync.Mutex
 }
 
-func newRDBMS(url_ *url.URL) (RDBMSDatabase, error) {
+func newPostgresDB(url_ *url.URL) (sqlDatabase, error) {
 	var err error
 
 	db := new(postgresDatabase)
@@ -119,7 +119,7 @@ func (db *postgresDatabase) IsClosed() bool {
 	return false
 }
 
-func (db *postgresDatabase) Engine() databaseEngine {
+func (db *postgresDatabase) Engine() sqlDatabaseEngine {
 	return Postgres
 }
 
@@ -152,8 +152,7 @@ func (db *postgresDatabase) AddNewTorrent(infoHash []byte, name string, files []
 	tx, err := db.conn.Begin()
 	if err != nil {
 		if db.errCount() {
-			time.Sleep(35 * time.Millisecond)
-			// log.Printf("SQL Server Transaction Failed to Be Enabled!")
+			time.Sleep(20 * time.Millisecond)
 			return errors.New("conn.Begin " + err.Error())
 		}
 		time.Sleep(10 * time.Second)
