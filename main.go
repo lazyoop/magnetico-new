@@ -38,8 +38,9 @@ var opFlags struct {
 	RunWeb     bool
 	RunStorage bool
 
-	QueueServiceUrl string
-	DatabaseURL     string
+	QueueServiceUrl                 string
+	QueueServicePersistsDatabaseURL string
+	DatabaseURL                     string
 
 	IndexerAddrs        []string
 	IndexerMaxNeighbors uint
@@ -103,7 +104,7 @@ func main() {
 
 	var persistentStorage storage.PersistentStorageServer
 	if opFlags.RunStorage {
-		persistentStorage = storage.StartPersistentStorage(opFlags.QueueServiceUrl, opFlags.DatabaseURL)
+		persistentStorage = storage.StartPersistentStorage(opFlags.QueueServiceUrl, opFlags.QueueServicePersistsDatabaseURL)
 		if persistentStorage == nil {
 			return
 		}
@@ -153,8 +154,9 @@ func parseFlags() error {
 		RunWithConfigFile bool   `long:"with-config-file" description:"Run using yaml configuration file."`
 		ConfigFilePath    string `long:"config-file-path" description:"Configuration file path. If not filled in, it will default to config.yml in the same directory of this program."`
 
-		QueueServiceUrl string `long:"mq" description:"Queue server URL.Get data from the queue server for persistence.Valid when the storage parameter is used." mapstructure:"queueServiceURL"`
-		DatabaseURL     string `long:"database" description:"URL of the Persistent database." default:"postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable" mapstructure:"databaseURL"`
+		QueueServiceUrl                 string `long:"queue" description:"The address of the queue service link." default:"amqp://rabbitmq:rabbitmq@localhost:5672/magnetico" mapstructure:"queueServiceURL"`
+		QueueServicePersistsDatabaseURL string `long:"queue-persists" description:"URL of the persistent database for queue data." default:"postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable" mapstructure:"queueServicePersistsDatabaseURL"`
+		DatabaseURL                     string `long:"database" description:"URL of the Persistent database." default:"postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable" mapstructure:"databaseURL"`
 
 		IndexerAddrs        []string `long:"indexer-addr" description:"Address(es) to be used by indexing DHT nodes." default:"0.0.0.0:0" mapstructure:"indexerAddrs"`
 		IndexerMaxNeighbors uint     `long:"indexer-max-neighbors" description:"Maximum number of neighbors of an indexer." default:"5000" mapstructure:"indexerMaxNeighbors"`
@@ -171,7 +173,7 @@ func parseFlags() error {
 
 		RunDaemon  bool `short:"d" long:"daemon" description:"Run the crawler without the web interface." mapstructure:"runDaemon"`
 		RunWeb     bool `short:"w" long:"web"    description:"Run the web interface without the crawler." mapstructure:"runWeb"`
-		RunStorage bool `short:"s" long:"storage" description:"Fetch and persist storage from the queue.You need to set both mq and database parameters" mapstructure:"runStorage"`
+		RunStorage bool `short:"s" long:"storage" description:"Fetch and persist storage from the queue.You need to set both queue and queue-persists parameters" mapstructure:"runStorage"`
 	}
 
 	if _, err := flags.Parse(&cmdF); err != nil {
@@ -209,7 +211,6 @@ func parseFlags() error {
 		}
 		_ = vip.MergeConfigMap(vip.AllSettings())
 
-		// return nil
 	}
 
 	if cmdF.RunDaemon && !cmdF.RunWeb {
@@ -224,14 +225,11 @@ func parseFlags() error {
 	}
 
 	if cmdF.RunStorage {
-		opFlags.RunDaemon = false
-		opFlags.RunWeb = false
 		opFlags.RunStorage = true
-	} else {
-		opFlags.RunStorage = false
+		opFlags.QueueServiceUrl = cmdF.QueueServiceUrl
+		opFlags.QueueServicePersistsDatabaseURL = cmdF.QueueServicePersistsDatabaseURL
 	}
 
-	opFlags.QueueServiceUrl = cmdF.QueueServiceUrl
 	opFlags.DatabaseURL = cmdF.DatabaseURL
 
 	if opFlags.RunWeb {
