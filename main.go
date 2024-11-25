@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"tgragnato.it/magnetico/utils"
 
 	"time"
 
@@ -30,6 +29,7 @@ import (
 	"tgragnato.it/magnetico/persistence"
 	"tgragnato.it/magnetico/stats"
 	"tgragnato.it/magnetico/storage"
+	"tgragnato.it/magnetico/utils"
 	"tgragnato.it/magnetico/web"
 )
 
@@ -54,6 +54,9 @@ var opFlags struct {
 
 	Credentials     map[string][]byte
 	CredentialsPath string
+
+	IsDevEnv bool
+	LogLevel zapcore.Level
 }
 
 func main() {
@@ -66,6 +69,7 @@ func main() {
 	// zap log
 	logger := utils.NewZapLog(zap.InfoLevel, false)
 	zap.ReplaceGlobals(logger)
+	defer logger.Sync()
 
 	// Handle Ctrl-C gracefully.
 	interruptChan := make(chan os.Signal, 1)
@@ -174,6 +178,9 @@ func parseFlags() error {
 		RunDaemon  bool `short:"d" long:"daemon" description:"Run the crawler without the web interface." mapstructure:"runDaemon"`
 		RunWeb     bool `short:"w" long:"web"    description:"Run the web interface without the crawler." mapstructure:"runWeb"`
 		RunStorage bool `short:"s" long:"storage" description:"Fetch and persist storage from the queue.You need to set both queue and queue-persists parameters" mapstructure:"runStorage"`
+
+		IsDevEnv bool   `long:"is-dev-env" description:"Enable developer mode." mapstructure:"isDevEnv"`
+		LogLevel string `long:"log-level" description:"Set the log level.Support: debug,info,warn,error,fatal,panic,dpanic" default:"warn" mapstructure:"logLevel"`
 	}
 
 	if _, err := flags.Parse(&cmdF); err != nil {
@@ -278,6 +285,29 @@ func parseFlags() error {
 		if len(opFlags.FilterNodesCIDRs) != 0 && reflect.DeepEqual(cmdF.BootstrappingNodes, []string{"dht.tgragnato.it"}) {
 			log.Fatalln("You should specify your own internal bootstrapping nodes in filter mode.")
 		}
+	}
+
+	if cmdF.IsDevEnv {
+		opFlags.IsDevEnv = true
+	}
+
+	switch cmdF.LogLevel {
+	case "debug":
+		opFlags.LogLevel = zap.DebugLevel
+	case "info":
+		opFlags.LogLevel = zap.InfoLevel
+	case "warn":
+		opFlags.LogLevel = zap.WarnLevel
+	case "error":
+		opFlags.LogLevel = zap.ErrorLevel
+	case "fatal":
+		opFlags.LogLevel = zap.FatalLevel
+	case "panic":
+		opFlags.LogLevel = zap.PanicLevel
+	case "dpanic":
+		opFlags.LogLevel = zap.DPanicLevel
+	default:
+		opFlags.LogLevel = zap.WarnLevel
 	}
 
 	return nil
