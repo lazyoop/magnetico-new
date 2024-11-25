@@ -42,7 +42,7 @@ func (z *ZapLogger) MakeDevelopmentLogger() {
 
 	//custom zap logger
 	loggerLevel := zap.NewAtomicLevel()
-	z.core = zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+	z.core = zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewDevelopmentEncoderConfig()),
 		zapcore.Lock(os.Stderr),
 		loggerLevel)
 
