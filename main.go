@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 	"io"
 	"log"
 	"net"
@@ -18,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"tgragnato.it/magnetico/utils"
 
 	"time"
 
@@ -59,6 +61,10 @@ func main() {
 		// Do not print any error messages as jessevdk/go-flags already did.
 		return
 	}
+
+	// zap log
+	logger := utils.NewZapLog(zap.InfoLevel, false)
+	zap.ReplaceGlobals(logger)
 
 	// Handle Ctrl-C gracefully.
 	interruptChan := make(chan os.Signal, 1)
