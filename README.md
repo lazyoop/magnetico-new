@@ -18,6 +18,9 @@ This allows anyone with a decent Internet connection to access the vast amount o
 **magnetico** liberates BitTorrent from the yoke of centralised trackers & web-sites and makes it
 *truly decentralised*. Finally!
 
+# **Warning ⚠**:
+**Based on the tgragnato/magnetico repository, the code may not be fully tested and there are bugs.**
+
 ## Easy Run and Compilation
 
 The easiest way to run magnetico is to use the OCI image built within the CI pipeline:
