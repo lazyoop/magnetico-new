@@ -13,3 +13,5 @@ cred: ""
 runDaemon: true
 runWeb: false
 runStorage: true
+isDevEnv: false
+logLevel: "warn"
