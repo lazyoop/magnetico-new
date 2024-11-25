@@ -18,6 +18,9 @@ This allows anyone with a decent Internet connection to access the vast amount o
 **magnetico** liberates BitTorrent from the yoke of centralised trackers & web-sites and makes it
 *truly decentralised*. Finally!
 
+# **Warning ⚠**:
+**Based on the tgragnato/magnetico repository, the code may not be fully tested and there are bugs.**
+
 ## Easy Run and Compilation
 
 The easiest way to run magnetico is to use the OCI image built within the CI pipeline:
@@ -75,6 +78,14 @@ The integration is designed in the persistence layer following the Publish/Subsc
 
 - `docker run --rm -it ghcr.io/tgragnato/magnetico:latest --help`
 - `docker run --rm -it ghcr.io/tgragnato/magnetico:latest -d --database=amqp://localhost:5672`
+
+### Bitmagnet
+
+Bitmagnet is a self-hosted BitTorrent indexer, DHT crawler, content classifier and torrent search engine with web UI, GraphQL API and Servarr stack integration.
+The integration is designed in the persistence layer as a producer for the import API endpoint, and works under the bitmagnet and bitmagnets URL schemas.
+
+- `docker run --rm -it ghcr.io/tgragnato/magnetico:latest --help`
+- `docker run --rm -it ghcr.io/tgragnato/magnetico:latest -d --database=bitmagnet://localhost:3333/import`
 
 ## Features
 

@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"go.uber.org/zap"
 	"net/url"
 	"strings"
 	"text/template"
@@ -552,7 +552,8 @@ func (db *sqlite3Database) setupDatabase() error {
 		// Upgrade from user_version 0 to 1
 		// Changes:
 		//   * `info_hash_index` is recreated as UNIQUE.
-		log.Println("Updating database schema from 0 to 1... (this might take a while)")
+		zap.L().Info("persistence",
+			zap.String("info", "Updating database schema from 0 to 1... (this might take a while)"))
 		_, err = tx.Exec(`
 			DROP INDEX IF EXISTS info_hash_index;
 			CREATE UNIQUE INDEX info_hash_index ON torrents	(info_hash);
@@ -571,7 +572,8 @@ func (db *sqlite3Database) setupDatabase() error {
 		//   * Added `is_readme` and `content` columns to the `files` table, and the constraints & the
 		//     the indices they entail.
 		//     * Added unique index `readme_index`  on `files` table.
-		log.Println("Updating database schema from 1 to 2... (this might take a while)")
+		zap.L().Info("persistence",
+			zap.String("info", "Updating database schema from 1 to 2... (this might take a while)"))
 		// We introduce two new columns in `files`: content BLOB, and is_readme INTEGER which we
 		// treat as a bool (NULL for false, and 1 for true; see the CHECK statement).
 		// The reason for the change is that as we introduce the new "readme" feature which
@@ -618,7 +620,8 @@ func (db *sqlite3Database) setupDatabase() error {
 		//     * https://sqlite.org/fts3.html
 		//
 		//   * Added `modified_on` column to the `torrents` table.
-		log.Println("Updating database schema from 2 to 3... (this might take a while)")
+		zap.L().Info("persistence",
+			zap.String("info", "Updating database schema from 2 to 3... (this might take a while)"))
 		_, err = tx.Exec(`
 			CREATE VIRTUAL TABLE torrents_idx USING fts5(name, content='torrents', content_rowid='id', tokenize="porter unicode61 separators ' !""#$%&''()*+,-./:;<=>?@[\]^_` + "`" + `{|}~'");
 			

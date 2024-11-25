@@ -1,7 +1,7 @@
 package mainline
 
 import (
-	"log"
+	"go.uber.org/zap"
 	"net"
 	"sync/atomic"
 	"time"
@@ -78,7 +78,9 @@ func (t *Transport) Start() {
 	var err error
 	t.conn, err = net.ListenUDP("udp", t.laddr)
 	if err != nil {
-		log.Fatalf("Could NOT bind the socket! %s\n", err.Error())
+		zap.L().Fatal("dht",
+			zap.String("info", "Could NOT bind the socket!"),
+			zap.Error(err))
 	}
 
 	go t.readMessages()

@@ -1,4 +1,4 @@
-package persistence
+package storage
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 	"unicode/utf8"
@@ -19,37 +20,110 @@ import (
 )
 
 type postgresDatabase struct {
-	conn *sql.DB
+	url          *url.URL
+	conn         *sql.DB
+	errRateLimit uint
+
+	sync.Mutex
 }
 
-func makePostgresDatabase(url_ *url.URL) (Database, error) {
+func newPostgresDB(url_ *url.URL) (sqlDatabase, error) {
+	var err error
+
 	db := new(postgresDatabase)
 
 	if url_.Scheme == "cockroach" {
 		url_.Scheme = "postgres"
 	}
+	db.url = url_
 
-	var err error
+	if err = db.connect(); err != nil {
+		return nil, err
+	}
+
+	db.statusListen()
+
+	return db, nil
+}
+
+func (db *postgresDatabase) connect() (err error) {
+	url_ := db.url
 	db.conn, err = sql.Open("pgx", url_.String())
 	if err != nil {
-		return nil, errors.New("sql.Open " + err.Error())
+		return errors.New("sql.Open " + err.Error())
 	}
 
 	// > Open may just validate its arguments without creating a connection to the database. To
 	// > verify that the data source Name is valid, call Ping.
 	// https://golang.org/pkg/database/sql/#Open
 	if err = db.conn.Ping(); err != nil {
-		return nil, errors.New("sql.DB.Ping " + err.Error())
+		_ = db.errCount()
+		return errors.New("sql.DB.Ping " + err.Error())
 	}
 
 	if err := db.setupDatabase(); err != nil {
-		return nil, errors.New("setupDatabase " + err.Error())
+		_ = db.errCount()
+		return errors.New("setupDatabase " + err.Error())
 	}
-
-	return db, nil
+	return nil
 }
 
-func (db *postgresDatabase) Engine() databaseEngine {
+func (db *postgresDatabase) statusListen() {
+	go func(p *postgresDatabase) {
+		checkInterval := time.NewTicker(10 * time.Second).C
+		for {
+			select {
+			case <-checkInterval:
+				p.Lock()
+				if p.IsClosed() {
+					if err := p.connect(); err != nil {
+						zap.L().Error("storage",
+							zap.String("info", "Automatic reconnection to SQL server failed!"),
+							zap.Error(err))
+					}
+				} else {
+					zap.L().Debug("storage",
+						zap.String("info", "SQL Service is online"))
+				}
+				p.Unlock()
+			}
+		}
+	}(db)
+
+	// 重置错误计数器
+	go func(p *postgresDatabase) {
+
+		checkInterval := time.NewTicker(1 * time.Minute).C
+		for {
+			select {
+			case <-checkInterval:
+				p.Lock()
+				p.errRateLimit = 0
+				zap.L().Debug("storage",
+					zap.String("info", "SQL error counter has been reset"))
+				p.Unlock()
+			}
+		}
+	}(db)
+
+}
+
+func (db *postgresDatabase) errCount() bool {
+	if db.errRateLimit <= 20 {
+		db.errRateLimit++
+		return true
+	}
+	return false
+}
+
+func (db *postgresDatabase) IsClosed() bool {
+	if err := db.conn.Ping(); err != nil {
+		return true
+	}
+	return false
+}
+
+func (db *postgresDatabase) Engine() sqlDatabaseEngine {
 	return Postgres
 }
 
@@ -76,10 +150,19 @@ func (db *postgresDatabase) AddNewTorrent(infoHash []byte, name string, files []
 	}
 	name = strings.ReplaceAll(name, "\x00", "")
 
+	db.Lock()
+	defer db.Unlock()
+
 	tx, err := db.conn.Begin()
 	if err != nil {
-		return errors.New("conn.Begin " + err.Error())
+		if db.errCount() {
+			time.Sleep(20 * time.Millisecond)
+			return errors.New("conn.Begin " + err.Error())
+		}
+		time.Sleep(10 * time.Second)
+		return errors.New("SQL Server Exception, Rate Limit! " + "\nconn.Begin " + err.Error())
 	}
+
 	// If everything goes as planned and no error occurs, we will commit the transaction before
 	// returning from the function so the tx.Rollback() call will fail, trying to rollback a
 	// committed transaction. BUT, if an error occurs, we'll get our transaction rollback'ed, which
@@ -415,7 +498,7 @@ func (db *postgresDatabase) setupDatabase() error {
 		return err
 	}
 	if !trgmInstalled {
-		zap.L().Warn("persistence",
+		zap.L().Warn("storage",
 			zap.String("info", "pg_trgm extension is not enabled. You need to execute 'CREATE EXTENSION pg_trgm' on this database"))
 	}
 
@@ -503,14 +586,20 @@ func (db *postgresDatabase) setupDatabase() error {
 
 func (db *postgresDatabase) closeRows(rows *sql.Rows) {
 	if err := rows.Close(); err != nil {
-		panic("postgres: could not close row " + err.Error())
+		// panic("postgres: could not close row " + err.Error())
+		zap.L().Error("storage",
+			zap.String("info", "postgres: could not close row"),
+			zap.Error(err))
 	}
 }
 
 func (db *postgresDatabase) rollback(tx *sql.Tx) {
 	if err := tx.Rollback(); err != nil &&
 		!strings.Contains(err.Error(), "transaction has already been committed") {
-		panic("postgres: could not rollback transaction " + err.Error())
+		// panic("postgres: could not rollback transaction " + err.Error())
+		zap.L().Warn("storage",
+			zap.String("info", "postgres: could not rollback transaction"),
+			zap.Error(err))
 	}
 }
 

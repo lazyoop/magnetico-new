@@ -3,7 +3,7 @@ package web
 import (
 	"context"
 	"embed"
-	"log"
+	"go.uber.org/zap"
 	"net/http"
 	"time"
 
@@ -30,7 +30,8 @@ const (
 func StartWeb(address string, cred map[string][]byte, db persistence.Database) {
 	credentials = cred
 	database = db
-	log.Printf("magnetico is ready to serve on %s!\n", address)
+	zap.L().Info("web",
+		zap.String("info", "magnetico is ready to serve on "+address+" !"))
 	server := &http.Server{
 		Addr:         address,
 		Handler:      makeRouter(),
@@ -39,7 +40,9 @@ func StartWeb(address string, cred map[string][]byte, db persistence.Database) {
 		IdleTimeout:  120 * time.Second,
 	}
 	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("ListenAndServe error %s\n", err.Error())
+		zap.L().Fatal("web",
+			zap.String("info", "ListenAndServe error"),
+			zap.Error(err))
 	}
 }
 
