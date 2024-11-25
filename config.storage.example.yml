@@ -1,0 +1,2 @@
+queueServiceURL: "amqp://rabbitmq:rabbitmq@localhost:5672/magnetico"
+databaseURL: "amqp://rabbitmq:rabbitmq@localhost:5672/magnetico"
