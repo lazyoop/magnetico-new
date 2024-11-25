@@ -3,7 +3,7 @@ package mainline
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"log"
+	"go.uber.org/zap"
 	mrand "math/rand"
 	"net"
 	"reflect"
@@ -110,7 +110,9 @@ func (is *IndexingService) bootstrap() {
 
 			dnsNameHost, dnsNamePort, err := net.SplitHostPort(dnsName)
 			if err != nil {
-				log.Printf("an error occurred while parsing BootstrappingNodes: %s\n", err.Error())
+				zap.L().Error("dht",
+					zap.String("info", "an error occurred while parsing BootstrappingNodes"),
+					zap.Error(err))
 				continue
 			}
 
@@ -139,7 +141,9 @@ func (is *IndexingService) bootstrap() {
 	if is.bootstrapNodesSelfPort {
 		bootstrappingPorts = bootstrappingSelfPorts
 		for k, ip := range bootstrappingIPs {
-			log.Printf("bootstrappingNode info: Host: %s, Port: %v \n", ip, bootstrappingSelfPorts[k])
+			zap.L().Debug("dht",
+				zap.String("info", "bootstrappingNode info: Host: "+ip.String()+
+					" ,Port: "+strconv.Itoa(bootstrappingSelfPorts[k])))
 			go is.protocol.SendMessage(
 				NewFindNodeQuery(is.nodeID, randomNodeID()),
 				&net.UDPAddr{
@@ -152,7 +156,9 @@ func (is *IndexingService) bootstrap() {
 
 	for _, ip := range bootstrappingIPs {
 		for _, port := range bootstrappingPorts {
-			log.Printf("bootstrappingNode info: Host: %s, Port: %v \n", ip, port)
+			zap.L().Debug("dht",
+				zap.String("info", "bootstrappingNode info: Host: "+ip.String()+
+					" ,Port: "+strconv.Itoa(port)))
 			go is.protocol.SendMessage(
 				NewFindNodeQuery(is.nodeID, randomNodeID()),
 				&net.UDPAddr{IP: ip, Port: port},

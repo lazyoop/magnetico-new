@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"go.uber.org/zap"
 	"net/url"
 	"strconv"
 	"strings"
@@ -415,7 +415,8 @@ func (db *postgresDatabase) setupDatabase() error {
 		return err
 	}
 	if !trgmInstalled {
-		log.Println("pg_trgm extension is not enabled. You need to execute 'CREATE EXTENSION pg_trgm' on this database")
+		zap.L().Warn("persistence",
+			zap.String("info", "pg_trgm extension is not enabled. You need to execute 'CREATE EXTENSION pg_trgm' on this database"))
 	}
 
 	// Initial Setup for schema version 0:

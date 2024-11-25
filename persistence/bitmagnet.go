@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"go.uber.org/zap"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -110,7 +110,8 @@ func (b *bitmagnet) AddNewTorrent(infoHash []byte, name string, files []File) er
 		return err
 	}
 	if b.debug {
-		log.Printf("Response: %s\n", string(body))
+		zap.L().Debug("persistence",
+			zap.String("info", "Response: "+string(body)))
 	}
 
 	b.cache[string(infoHash)] = time.Now().Add(10 * time.Minute)

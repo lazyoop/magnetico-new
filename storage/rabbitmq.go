@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"log"
+	"go.uber.org/zap"
 	"net/url"
 	"sync"
 	"time"
@@ -121,10 +121,14 @@ func (r *rabbitMQ) handlerTorrent() {
 				r.Unlock()
 				continue
 			}
-			log.Printf("consume msg: %s", msgContent)
+			zap.L().Debug("handlerTorrentPersistence",
+				zap.String("info", "consume msg"),
+				zap.ByteString("details", msgContent))
 			err = r.sqlDB.AddNewTorrent([]byte(torrentInfo.InfoHash), torrentInfo.Name, torrentInfo.Files)
 			if err != nil {
-				log.Printf(err.Error())
+				zap.L().Error("handlerTorrentPersistence",
+					zap.String("info", "add new torrent error"),
+					zap.Error(err))
 				_ = xp.Nack(false, true)
 				r.Unlock()
 				continue
@@ -132,7 +136,9 @@ func (r *rabbitMQ) handlerTorrent() {
 
 			err = xp.Ack(false)
 			if err != nil {
-				log.Printf("failed to respond to MQ queue acknowledgment message: %s", err.Error())
+				zap.L().Error("handlerTorrentPersistence",
+					zap.String("info", "failed to respond to MQ queue acknowledgment message"),
+					zap.Error(err))
 			}
 			r.Unlock()
 		case <-r.iStop.Done():
@@ -152,13 +158,18 @@ func (r *rabbitMQ) statusListen() {
 				rq.Lock()
 
 				if r.ch.IsClosed() || r.conn.IsClosed() {
-						log.Printf("Automatic reconnection to MQ server failed: " + err.Error())
 					if err := r.connectQueue(); err != nil {
+						zap.L().Warn("handlerTorrentPersistence",
+							zap.String("info", "automatic reconnection to MQ server failed"),
+							zap.Error(err))
 					} else {
-						log.Printf("Successfully reconnected to MQ Server")
+						zap.L().Info("handlerTorrentPersistence",
+							zap.String("info", "successfully reconnected to Queue Server"))
 					}
 				} else {
-					log.Printf("MQ service is online")
+					zap.L().Debug("handlerTorrentPersistence",
+						zap.String("info", "queue service is online"),
+					)
 				}
 
 				rq.Unlock()

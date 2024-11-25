@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"go.uber.org/zap"
 	"net/url"
 	"strconv"
 	"strings"
@@ -77,10 +77,13 @@ func (db *postgresDatabase) statusListen() {
 				p.Lock()
 				if p.IsClosed() {
 					if err := p.connect(); err != nil {
-						log.Printf("Automatic reconnection to SQL server failed: " + err.Error())
+						zap.L().Error("storage",
+							zap.String("info", "Automatic reconnection to SQL server failed!"),
+							zap.Error(err))
 					}
 				} else {
-					log.Printf("SQL service is online")
+					zap.L().Debug("storage",
+						zap.String("info", "SQL Service is online"))
 				}
 				p.Unlock()
 			}
@@ -96,7 +99,8 @@ func (db *postgresDatabase) statusListen() {
 			case <-checkInterval:
 				p.Lock()
 				p.errRateLimit = 0
-				log.Printf("SQL error counter has been reset")
+				zap.L().Debug("storage",
+					zap.String("info", "SQL error counter has been reset"))
 				p.Unlock()
 			}
 		}
@@ -494,7 +498,8 @@ func (db *postgresDatabase) setupDatabase() error {
 		return err
 	}
 	if !trgmInstalled {
-		log.Println("pg_trgm extension is not enabled. You need to execute 'CREATE EXTENSION pg_trgm' on this database")
+		zap.L().Warn("storage",
+			zap.String("info", "pg_trgm extension is not enabled. You need to execute 'CREATE EXTENSION pg_trgm' on this database"))
 	}
 
 	// Initial Setup for schema version 0:
@@ -582,7 +587,9 @@ func (db *postgresDatabase) setupDatabase() error {
 func (db *postgresDatabase) closeRows(rows *sql.Rows) {
 	if err := rows.Close(); err != nil {
 		// panic("postgres: could not close row " + err.Error())
-		log.Printf("postgres: could not close row " + err.Error())
+		zap.L().Error("storage",
+			zap.String("info", "postgres: could not close row"),
+			zap.Error(err))
 	}
 }
 
@@ -590,7 +597,9 @@ func (db *postgresDatabase) rollback(tx *sql.Tx) {
 	if err := tx.Rollback(); err != nil &&
 		!strings.Contains(err.Error(), "transaction has already been committed") {
 		// panic("postgres: could not rollback transaction " + err.Error())
-		log.Printf("postgres: could not rollback transaction " + err.Error())
+		zap.L().Warn("storage",
+			zap.String("info", "postgres: could not rollback transaction"),
+			zap.Error(err))
 	}
 }
 

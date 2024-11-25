@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"io"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -87,18 +87,24 @@ func main() {
 
 			opFlags.Credentials = make(map[string][]byte)
 			if err := loadCred(opFlags.CredentialsPath); err != nil {
-				log.Fatalf("couldn't load credentials %s\n", err.Error())
+				zap.L().Fatal("main",
+					zap.String("info", "couldn't load credentials"),
+					zap.Error(err))
 			}
 		}
 	}()
 
 	database, err := persistence.MakeDatabase(opFlags.DatabaseURL)
 	if err != nil {
-		log.Fatalf("Could not open the database %s. %s\n", opFlags.DatabaseURL, err.Error())
+		zap.L().Fatal("main",
+			zap.String("info", "Could not open the database"+opFlags.DatabaseURL),
+			zap.Error(err))
 	}
 	defer func() {
 		if err = database.Close(); err != nil {
-			log.Printf("Could not close database! %s\n", err.Error())
+			zap.L().Error("main",
+				zap.String("info", "Could not close database!"),
+				zap.Error(err))
 		}
 	}()
 
@@ -116,7 +122,9 @@ func main() {
 	}
 	defer func() {
 		if err = persistentStorage.Close(); err != nil {
-			log.Printf("Could not close MQ! %s\n", err.Error())
+			zap.L().Error("main",
+				zap.String("info", "Could not close Queue!"),
+				zap.Error(err))
 		}
 	}()
 
@@ -251,7 +259,9 @@ func parseFlags() error {
 
 	if opFlags.RunDaemon {
 		if err := checkAddrs(cmdF.IndexerAddrs); err != nil {
-			log.Fatalf("Of argument (list) `trawler-ml-addr` %s\n", err.Error())
+			zap.L().Fatal("main",
+				zap.String("info", "Of argument (list) `trawler-ml-addr`"),
+				zap.Error(err))
 		} else {
 			opFlags.IndexerAddrs = cmdF.IndexerAddrs
 		}
@@ -260,10 +270,9 @@ func parseFlags() error {
 
 		opFlags.LeechMaxN = int(cmdF.LeechMaxN)
 		if opFlags.LeechMaxN > 1000 {
-			log.Println(
-				"Beware that on many systems max # of file descriptors per process is limited to 1024. " +
-					"Setting maximum number of leeches greater than 1k might cause \"too many open files\" errors!",
-			)
+			zap.L().Warn("main",
+				zap.String("info", "Beware that on many systems max # of file descriptors per process is limited to 1024. "+
+					"Setting maximum number of leeches greater than 1k might cause \"too many open files\" errors!"))
 		}
 
 		mainline.DefaultThrottleRate = int(cmdF.MaxRPS)
@@ -279,11 +288,14 @@ func parseFlags() error {
 			if _, ipnet, err := net.ParseCIDR(cidr); err == nil {
 				opFlags.FilterNodesCIDRs = append(opFlags.FilterNodesCIDRs, *ipnet)
 			} else {
-				log.Fatalf("Error while parsing CIDR %s: %s\n", cidr, err.Error())
+				zap.L().Fatal("main",
+					zap.String("info", "Error while parsing CIDR "+cidr),
+					zap.Error(err))
 			}
 		}
 		if len(opFlags.FilterNodesCIDRs) != 0 && reflect.DeepEqual(cmdF.BootstrappingNodes, []string{"dht.tgragnato.it"}) {
-			log.Fatalln("You should specify your own internal bootstrapping nodes in filter mode.")
+			zap.L().Fatal("main",
+				zap.String("info", "You should specify your own internal bootstrapping nodes in filter mode."))
 		}
 	}
 

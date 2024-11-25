@@ -1,12 +1,16 @@
 package storage
 
-import "log"
+import (
+	"go.uber.org/zap"
+)
 
 func StartPersistentStorage(mqURL, sqlURL string) PersistentStorageServer {
 
 	makePersistentStorageServer, err := MakePersistentStorageServer(mqURL, sqlURL)
 	if err != nil {
-		log.Printf("MakeMQServer ERR: " + err.Error())
+		zap.L().Error("storage",
+			zap.String("info", "make persistent storage failed"),
+			zap.Error(err))
 		return nil
 	}
 	return makePersistentStorageServer
