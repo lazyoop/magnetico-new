@@ -1,3 +1,5 @@
+queueServiceURL: "amqp://rabbitmq:rabbitmq@localhost:5672/magnetico"
+queueServicePersistsDatabaseURL: "postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable"
 databaseURL: "amqp://rabbitmq:rabbitmq@localhost:5672/magnetico"
 indexerAddrs: "0.0.0.0:0"
 indexerMaxNeighbors: 600
@@ -10,3 +12,4 @@ addr: "0.0.0.0:58965"
 cred: ""
 runDaemon: true
 runWeb: false
+runStorage: true
