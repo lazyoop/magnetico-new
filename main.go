@@ -121,10 +121,13 @@ func main() {
 		_ = persistentStorage.HandlerTorrent()
 	}
 	defer func() {
-		if err = persistentStorage.Close(); err != nil {
-			zap.L().Error("main",
-				zap.String("info", "Could not close Queue!"),
-				zap.Error(err))
+		if persistentStorage != nil {
+
+			if err = persistentStorage.Close(); err != nil {
+				zap.L().Error("main",
+					zap.String("info", "Could not close Queue!"),
+					zap.Error(err))
+			}
 		}
 	}()
 
