@@ -19,7 +19,7 @@ This allows anyone with a decent Internet connection to access the vast amount o
 *truly decentralised*. Finally!
 
 # **Warning ⚠**:
-**Based on the tgragnato/magnetico repository, the code may not be fully tested and there are bugs.**
+**Based on the [tgragnato/magnetico](https://github.com/tgragnato/magnetico.git) repository, the code may not be fully tested and there are bugs.**
 
 ## Easy Run and Compilation
 
