@@ -97,7 +97,7 @@ func main() {
 	database, err := persistence.MakeDatabase(opFlags.DatabaseURL)
 	if err != nil {
 		zap.L().Fatal("main",
-			zap.String("info", "Could not open the database"+opFlags.DatabaseURL),
+			zap.String("info", "Could not open the database. "+opFlags.DatabaseURL),
 			zap.Error(err))
 	}
 	defer func() {

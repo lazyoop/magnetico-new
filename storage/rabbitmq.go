@@ -122,13 +122,13 @@ func (r *rabbitMQ) handlerTorrent() {
 				r.Unlock()
 				continue
 			}
-			zap.L().Debug("handlerTorrentPersistence",
+			zap.L().Debug("storage",
 				zap.String("info", "consume msg"),
 				zap.ByteString("details", msgContent))
 			infoHash, _ := hex.DecodeString(torrentInfo.InfoHash)
 			err = r.sqlDB.AddNewTorrent(infoHash, torrentInfo.Name, torrentInfo.Files)
 			if err != nil {
-				zap.L().Error("handlerTorrentPersistence",
+				zap.L().Error("storage",
 					zap.String("info", "add new torrent error"),
 					zap.Error(err))
 				_ = xp.Nack(false, true)
@@ -138,7 +138,7 @@ func (r *rabbitMQ) handlerTorrent() {
 
 			err = xp.Ack(false)
 			if err != nil {
-				zap.L().Error("handlerTorrentPersistence",
+				zap.L().Error("storage",
 					zap.String("info", "failed to respond to MQ queue acknowledgment message"),
 					zap.Error(err))
 			}
@@ -161,15 +161,15 @@ func (r *rabbitMQ) statusListen() {
 
 				if r.ch.IsClosed() || r.conn.IsClosed() {
 					if err := r.connectQueue(); err != nil {
-						zap.L().Warn("handlerTorrentPersistence",
+						zap.L().Warn("storage",
 							zap.String("info", "automatic reconnection to MQ server failed"),
 							zap.Error(err))
 					} else {
-						zap.L().Info("handlerTorrentPersistence",
+						zap.L().Info("storage",
 							zap.String("info", "successfully reconnected to Queue Server"))
 					}
 				} else {
-					zap.L().Debug("handlerTorrentPersistence",
+					zap.L().Debug("storage",
 						zap.String("info", "queue service is online"),
 					)
 				}
