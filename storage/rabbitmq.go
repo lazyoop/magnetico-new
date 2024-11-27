@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
@@ -124,7 +125,8 @@ func (r *rabbitMQ) handlerTorrent() {
 			zap.L().Debug("handlerTorrentPersistence",
 				zap.String("info", "consume msg"),
 				zap.ByteString("details", msgContent))
-			err = r.sqlDB.AddNewTorrent([]byte(torrentInfo.InfoHash), torrentInfo.Name, torrentInfo.Files)
+			infoHash, _ := hex.DecodeString(torrentInfo.InfoHash)
+			err = r.sqlDB.AddNewTorrent(infoHash, torrentInfo.Name, torrentInfo.Files)
 			if err != nil {
 				zap.L().Error("handlerTorrentPersistence",
 					zap.String("info", "add new torrent error"),
