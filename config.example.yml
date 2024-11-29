@@ -1,6 +1,5 @@
-queueServiceURL: "amqp://rabbitmq:rabbitmq@localhost:5672/magnetico"
-queueServicePersistsDatabaseURL: "postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable"
-databaseURL: "amqp://rabbitmq:rabbitmq@localhost:5672/magnetico"
+queueServiceURL: "amqp://rabbitmq:rabbitmq@localhost:5672/magnetico" # The address of the queue service.Fetch data from a queue for persistent storage.For this parameter to take effect, you need to set runQueueTransferDB: true
+databaseURL: "postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable" # Required. sql db
 indexerAddrs: "0.0.0.0:0"
 indexerMaxNeighbors: 600
 leechMaxN: 700
@@ -9,9 +8,9 @@ bootstrappingNodes: "dht.libtorrent.org:25401,dht.transmissionbt.com:6881,router
 bootstrapNodesSelfPort: true
 filterNodesCIDRs: ""
 addr: "0.0.0.0:58965"
-cred: ""
+credentials: ""
 runDaemon: true
 runWeb: false
-runStorage: true
+runQueueTransferDB: true # Fetch data from the queue and transfer it to database storage.
 isDevEnv: false
 logLevel: "warn"

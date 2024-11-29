@@ -34,13 +34,12 @@ import (
 )
 
 var opFlags struct {
-	RunDaemon  bool
-	RunWeb     bool
-	RunStorage bool
+	RunDaemon          bool
+	RunWeb             bool
+	RunQueueTransferDB bool
 
-	QueueServiceUrl                 string
-	QueueServicePersistsDatabaseURL string
-	DatabaseURL                     string
+	QueueServiceUrl string
+	DatabaseURL     string
 
 	IndexerAddrs        []string
 	IndexerMaxNeighbors uint
@@ -113,9 +112,9 @@ func main() {
 	}
 
 	var persistentStorage storage.PersistentStorageServer
-	if opFlags.RunStorage {
 		persistentStorage = storage.StartPersistentStorage(opFlags.QueueServiceUrl, opFlags.QueueServicePersistsDatabaseURL)
 		if persistentStorage == nil {
+	if opFlags.RunQueueTransferDB {
 			return
 		}
 		_ = persistentStorage.HandlerTorrent()
@@ -169,26 +168,25 @@ func parseFlags() error {
 		RunWithConfigFile bool   `long:"with-config-file" description:"Run using yaml configuration file."`
 		ConfigFilePath    string `long:"config-file-path" description:"Configuration file path. If not filled in, it will default to config.yml in the same directory of this program."`
 
-		QueueServiceUrl                 string `long:"queue" description:"The address of the queue service link." default:"amqp://rabbitmq:rabbitmq@localhost:5672/magnetico" mapstructure:"queueServiceURL"`
-		QueueServicePersistsDatabaseURL string `long:"queue-persists" description:"URL of the persistent database for queue data." default:"postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable" mapstructure:"queueServicePersistsDatabaseURL"`
-		DatabaseURL                     string `long:"database" description:"URL of the Persistent database." default:"postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable" mapstructure:"databaseURL"`
+		QueueServiceUrl string `long:"queue-service-url" description:"The address of the queue service link." default:"amqp://rabbitmq:rabbitmq@localhost:5672/magnetico" mapstructure:"queueServiceURL"`
+		DatabaseURL     string `long:"database-url" description:"URL of the Persistent database." default:"postgres://magnetico:magnetico@localhost:5432/magnetico?sslmode=disable" mapstructure:"databaseURL"`
 
-		IndexerAddrs        []string `long:"indexer-addr" description:"Address(es) to be used by indexing DHT nodes." default:"0.0.0.0:0" mapstructure:"indexerAddrs"`
+		IndexerAddrs        []string `long:"indexer-addrs" description:"Address(es) to be used by indexing DHT nodes." default:"0.0.0.0:0" mapstructure:"indexerAddrs"`
 		IndexerMaxNeighbors uint     `long:"indexer-max-neighbors" description:"Maximum number of neighbors of an indexer." default:"5000" mapstructure:"indexerMaxNeighbors"`
 
 		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"1000" mapstructure:"leechMaxN"`
 		MaxRPS    uint `long:"max-rps" description:"Maximum requests per second." default:"500" mapstructure:"maxRPS"`
 
-		BootstrappingNodes     []string `long:"bootstrap-node" description:"Host(s) to be used for bootstrapping." default:"dht.tgragnato.it" mapstructure:"bootstrappingNodes"`
-		BootstrapNodesSelfPort bool     `long:"is-bootstrap-node-self-port" description:"Customize the port of the boot host(s)." mapstructure:"bootstrapNodesSelfPort"`
+		BootstrappingNodes     []string `long:"bootstrapping-node" description:"Host(s) to be used for bootstrapping." default:"dht.tgragnato.it" mapstructure:"bootstrappingNodes"`
+		BootstrapNodesSelfPort bool     `long:"bootstrap-node-self-port" description:"Customize the port of the boot host(s)." mapstructure:"bootstrapNodesSelfPort"`
 		FilterNodesCIDRs       []string `long:"filter-nodes-cidrs" description:"List of CIDRs on which Magnetico can operate. Empty is open mode." default:"" mapstructure:"filterNodesCIDRs"`
 
 		Addr string `short:"a" long:"addr"        description:"Address (host:port) to serve on" default:"[::1]:8080" mapstructure:"addr"`
-		Cred string `short:"c" long:"credentials" description:"Path to the credentials file" default:"" mapstructure:"cred"`
+		Cred string `short:"c" long:"credentials" description:"Path to the credentials file" default:"" mapstructure:"credentials"`
 
-		RunDaemon  bool `short:"d" long:"daemon" description:"Run the crawler without the web interface." mapstructure:"runDaemon"`
-		RunWeb     bool `short:"w" long:"web"    description:"Run the web interface without the crawler." mapstructure:"runWeb"`
-		RunStorage bool `short:"s" long:"storage" description:"Fetch and persist storage from the queue.You need to set both queue and queue-persists parameters" mapstructure:"runStorage"`
+		RunDaemon          bool `short:"d" long:"run-daemon" description:"Run the crawler without the web interface." mapstructure:"runDaemon"`
+		RunWeb             bool `short:"w" long:"run-web"    description:"Run the web interface without the crawler." mapstructure:"runWeb"`
+		RunQueueTransferDB bool `short:"s" long:"run-queue-transfer-db" description:"Fetch and persist storage from the queue.You need to set both queue and database parameters" mapstructure:"runQueueTransferDB"`
 
 		IsDevEnv bool   `long:"is-dev-env" description:"Enable developer mode." mapstructure:"isDevEnv"`
 		LogLevel string `long:"log-level" description:"Set the log level.Support: debug,info,warn,error,fatal,panic,dpanic" default:"warn" mapstructure:"logLevel"`
@@ -237,15 +235,17 @@ func parseFlags() error {
 	} else if !cmdF.RunDaemon && cmdF.RunWeb {
 		opFlags.RunDaemon = false
 		opFlags.RunWeb = true
+	} else if cmdF.RunDaemon && cmdF.RunWeb {
+		opFlags.RunDaemon = true
+		opFlags.RunWeb = true
 	} else {
 		opFlags.RunDaemon = false
 		opFlags.RunWeb = false
 	}
 
-	if cmdF.RunStorage {
-		opFlags.RunStorage = true
+	if cmdF.RunQueueTransferDB {
+		opFlags.RunQueueTransferDB = true
 		opFlags.QueueServiceUrl = cmdF.QueueServiceUrl
-		opFlags.QueueServicePersistsDatabaseURL = cmdF.QueueServicePersistsDatabaseURL
 	}
 
 	opFlags.DatabaseURL = cmdF.DatabaseURL
