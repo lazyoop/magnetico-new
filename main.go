@@ -106,22 +106,41 @@ func main() {
 				zap.Error(err))
 		}
 	}()
+	var torrentEventDB persistence.Database
+	if opFlags.RunQueueTransferDB {
+		torrentEventDB, err = persistence.MakeDatabase(opFlags.QueueServiceUrl)
+		if err != nil {
+			zap.L().Fatal("main",
+				zap.String("info", "Could not open the transfer database. "+opFlags.QueueServiceUrl),
+				zap.Error(err))
+		}
+	} else {
+		torrentEventDB = database
+	}
+	defer func() {
+		if opFlags.RunQueueTransferDB {
+			if err = torrentEventDB.Close(); err != nil {
+				zap.L().Error("main",
+					zap.String("info", "Could not close database!"),
+					zap.Error(err))
+			}
+		}
+	}()
 
 	if opFlags.RunWeb {
 		go web.StartWeb(opFlags.Addr, opFlags.Credentials, database)
 	}
 
 	var persistentStorage storage.PersistentStorageServer
-		persistentStorage = storage.StartPersistentStorage(opFlags.QueueServiceUrl, opFlags.QueueServicePersistsDatabaseURL)
-		if persistentStorage == nil {
 	if opFlags.RunQueueTransferDB {
+		persistentStorage, err = storage.StartPersistentStorage(opFlags.QueueServiceUrl, opFlags.DatabaseURL)
+		if err != nil {
 			return
 		}
 		_ = persistentStorage.HandlerTorrent()
 	}
 	defer func() {
-		if persistentStorage != nil {
-
+		if opFlags.RunQueueTransferDB {
 			if err = persistentStorage.Close(); err != nil {
 				zap.L().Error("main",
 					zap.String("info", "Could not close Queue!"),
@@ -144,7 +163,7 @@ func main() {
 		case result := <-trawlingManager.Output():
 			infoHash := result.InfoHash()
 
-			exists, err := database.DoesTorrentExist(infoHash[:])
+			exists, err := torrentEventDB.DoesTorrentExist(infoHash[:])
 			if err != nil {
 				go stats.GetInstance().IncDBError(false)
 			} else if !exists {
@@ -152,7 +171,7 @@ func main() {
 			}
 
 		case md := <-metadataSink.Drain():
-			if err := database.AddNewTorrent(md.InfoHash, md.Name, md.Files); err != nil {
+			if err := torrentEventDB.AddNewTorrent(md.InfoHash, md.Name, md.Files); err != nil {
 				go stats.GetInstance().IncDBError(true)
 			}
 
