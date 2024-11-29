@@ -156,11 +156,10 @@ func (db *postgresDatabase) AddNewTorrent(infoHash []byte, name string, files []
 	tx, err := db.conn.Begin()
 	if err != nil {
 		if db.errCount() {
-			time.Sleep(20 * time.Millisecond)
-			return errors.New("conn.Begin " + err.Error())
+			return newSqlErr("conn.Begin", SqlTransactionBeginErr, err)
 		}
 		time.Sleep(10 * time.Second)
-		return errors.New("SQL Server Exception, Rate Limit! " + "\nconn.Begin " + err.Error())
+		return newSqlErr("SQL Server Exception, Rate Limit! \nconn.Begin ", SqlTransactionRateLimiting, err)
 	}
 
 	// If everything goes as planned and no error occurs, we will commit the transaction before
@@ -180,7 +179,10 @@ func (db *postgresDatabase) AddNewTorrent(infoHash []byte, name string, files []
 	}
 
 	if exist, err := db.DoesTorrentExist(infoHash); exist || err != nil {
-		return err
+		if exist {
+			return newSqlErr("torrent exist", InfoHashExistErr, nil)
+		}
+		return newSqlErr("db.DoesTorrentExist", DoesTorrentExistErr, err)
 	}
 
 	var lastInsertId int64
@@ -195,7 +197,7 @@ func (db *postgresDatabase) AddNewTorrent(infoHash []byte, name string, files []
 		RETURNING id;
 	`, infoHash, name, totalSize, time.Now().Unix()).Scan(&lastInsertId)
 	if err != nil {
-		return errors.New("tx.QueryRow (INSERT INTO torrents) " + err.Error())
+		return newSqlErr("tx.QueryRow (INSERT INTO torrents)", InsertTorrentsErr, err)
 	}
 
 	for _, file := range files {
@@ -209,13 +211,13 @@ func (db *postgresDatabase) AddNewTorrent(infoHash []byte, name string, files []
 			lastInsertId, file.Size, file.Path,
 		)
 		if err != nil {
-			return errors.New("tx.Exec (INSERT INTO files) " + err.Error())
+			return newSqlErr("tx.Exec (INSERT INTO files)", InsertTorrentsFilesErr, err)
 		}
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return errors.New("tx.Commit " + err.Error())
+		return newSqlErr("tx.Commit", SqlTransactionCommitErr, err)
 	}
 
 	return nil

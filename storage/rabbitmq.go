@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 	"net/url"
@@ -128,12 +129,34 @@ func (r *rabbitMQ) handlerTorrent() {
 			infoHash, _ := hex.DecodeString(torrentInfo.InfoHash)
 			err = r.sqlDB.AddNewTorrent(infoHash, torrentInfo.Name, torrentInfo.Files)
 			if err != nil {
-				zap.L().Error("storage",
-					zap.String("info", "add new torrent error"),
-					zap.Error(err))
-				_ = xp.Nack(false, true)
-				r.Unlock()
-				continue
+				switch {
+				case errors.Is(err, InfoHashExistErr):
+					_ = xp.Ack(false)
+					zap.L().Debug("storage",
+						zap.String("info", "InfoHashExist"))
+					r.Unlock()
+					continue
+				case errors.Is(err, DoesTorrentExistErr):
+					_ = xp.Nack(false, true)
+					r.Unlock()
+					continue
+				case errors.Is(err, SqlTransactionBeginErr) || errors.Is(err, SqlTransactionCommitErr):
+					_ = xp.Nack(false, true)
+					r.Unlock()
+					continue
+				case errors.Is(err, InsertTorrentsErr) || errors.Is(err, InsertTorrentsFilesErr):
+					_ = xp.Reject(false)
+					zap.L().Error("storage",
+						zap.String("error", err.Error()))
+					r.Unlock()
+					continue
+				case errors.Is(err, SqlTransactionRateLimiting):
+					_ = xp.Nack(false, true)
+					zap.L().Error("storage",
+						zap.String("info", err.Error()))
+					r.Unlock()
+					continue
+				}
 			}
 
 			err = xp.Ack(false)
@@ -143,6 +166,7 @@ func (r *rabbitMQ) handlerTorrent() {
 					zap.Error(err))
 			}
 			r.Unlock()
+
 		case <-r.iStop.Done():
 			return
 		}
