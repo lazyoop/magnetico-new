@@ -72,6 +72,46 @@ const (
 	RabbitMQ queueEngine = iota + 1
 )
 
+// An error that occurred when the queue read or wrote data to the database.
+// These error types are used for control over the message.
+var (
+	InfoHashExistErr    = errors.New("InfoHashExistSQL")
+	DoesTorrentExistErr = errors.New("DoesTorrentExistErr")
+
+	SqlTransactionBeginErr  = errors.New("SqlTransactionBeginErr")
+	SqlTransactionCommitErr = errors.New("SqlTransactionCommitErr")
+
+	InsertTorrentsErr      = errors.New("InsertTorrentsErr")
+	InsertTorrentsFilesErr = errors.New("InsertTorrentsFilesErr")
+
+	SqlTransactionRateLimiting = errors.New("SQLTransactionRateLimiting")
+)
+
+// SqlErr use in queues to enhance the management of messages in queues
+// Msg Customized messages.
+// ErrType Write the error types defined above, and add them if there is no suitable one.
+// Err Normal err.
+type SqlErr struct {
+	Msg          string
+	ErrType, Err error
+}
+
+func (s SqlErr) Error() string {
+	if s.Err != nil && s.ErrType != nil {
+		return fmt.Sprintf("%v:%s\n%v", s.ErrType, s.Msg, s.Err)
+	}
+	return s.Msg
+}
+
+// newSqlErr use in queues to enhance the management of messages in queues
+func newSqlErr(message string, errType, err error) error {
+	return &SqlErr{
+		Msg:     message,
+		Err:     err,
+		ErrType: errType,
+	}
+}
+
 type Statistics struct {
 	NDiscovered map[string]uint64 `json:"nDiscovered"`
 	NFiles      map[string]uint64 `json:"nFiles"`
