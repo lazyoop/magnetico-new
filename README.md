@@ -21,6 +21,13 @@ This allows anyone with a decent Internet connection to access the vast amount o
 # **Warning ⚠**:
 **This repository is based on the secondary development of [tgragnato/magnetico](https://github.com/tgragnato/magnetico.git), the code may not be fully tested and there are bugs.**
 
+If you don't want to build with containers:
+- Here is an example for `Rocky Linux 9.x` users.
+  ```bash
+      dnf install epel-release && \
+      dnf install gcc gcc-c++ libsodium zeromq-devel czmq-devel
+    ```
+
 ## Easy Run and Compilation
 
 The easiest way to run magnetico is to use the OCI image built within the CI pipeline:
