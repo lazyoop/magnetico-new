@@ -13,7 +13,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/spf13/viper v1.19.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.30.0
+	golang.org/x/crypto v0.31.0
 	gopkg.in/zeromq/goczmq.v4 v4.1.0
 	maragu.dev/gomponents v1.0.0
 )
