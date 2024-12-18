@@ -176,6 +176,11 @@ func apiTorrents(w http.ResponseWriter, r *http.Request) {
 
 	if r.Form.Has("limit") {
 		tq.Limit, err = strconv.ParseUint(r.Form.Get("limit"), 10, 64)
+		// Limit the maximum number of queries
+		if tq.Limit > 100 {
+			http.Error(w, "The maximum number of queries allowed at a time is exceeded!", http.StatusBadRequest)
+			return
+		}
 		if err != nil {
 			http.Error(w, "error while parsing the URL: "+err.Error(), http.StatusBadRequest)
 			return
