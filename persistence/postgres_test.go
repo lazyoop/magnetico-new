@@ -180,7 +180,7 @@ func TestPostgresDatabase_GetNumberOfQueryTorrents(t *testing.T) {
 		t.Errorf("Expected no error, but got %v", err)
 	}
 
-	if result != uint(10) {
+	if result != uint64(10) {
 		t.Errorf("Expected result to be 10, but got %d", result)
 	}
 
@@ -199,7 +199,7 @@ func TestPostgresDatabase_GetNumberOfQueryTorrents(t *testing.T) {
 		t.Error("Expected an error, but got none")
 	}
 
-	if result != uint(0) {
+	if result != uint64(0) {
 		t.Errorf("Expected result to be 0, but got %d", result)
 	}
 
@@ -218,7 +218,7 @@ func TestPostgresDatabase_GetNumberOfQueryTorrents(t *testing.T) {
 		t.Errorf("Expected no error, but got %v", err)
 	}
 
-	if result != uint(0) {
+	if result != uint64(0) {
 		t.Errorf("Expected result to be 0, but got %d", result)
 	}
 
@@ -492,10 +492,10 @@ func TestPostgresDatabase_QueryTorrents(t *testing.T) {
 				0
 			FROM torrents
 			WHERE
-				name ILIKE CONCAT\('%',\$1::text,'%'\) AND
+				\(\$1::text = '' OR name ILIKE CONCAT\('%',\$1::text,'%'\)\) AND
 				discovered_on <= \$2 AND
-				total_size > \$3 AND
-				id > \$4
+				\(\$3 = 0 OR total_size > \$3\) AND
+				\(\$4 = 0 OR id > \$4\)
 			ORDER BY total_size ASC, id ASC
 			LIMIT \$5;
 		`).
@@ -552,10 +552,10 @@ func TestPostgresDatabase_QueryTorrents(t *testing.T) {
 				0
 			FROM torrents
 			WHERE
-				name ILIKE CONCAT\('%',\$1::text,'%'\) AND
+				\(\$1::text = '' OR name ILIKE CONCAT\('%',\$1::text,'%'\)\) AND
 				discovered_on <= \$2 AND
-				total_size > \$3 AND
-				id > \$4
+				\(\$3 = 0 OR total_size > \$3\) AND
+				\(\$4 = 0 OR id > \$4\)
 			ORDER BY total_size ASC, id ASC
 			LIMIT \$5;
 		`).

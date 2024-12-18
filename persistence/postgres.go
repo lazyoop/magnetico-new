@@ -167,7 +167,7 @@ func (db *postgresDatabase) GetNumberOfTorrents() (uint, error) {
 	}
 }
 
-func (db *postgresDatabase) GetNumberOfQueryTorrents(query string, epoch int64) (uint, error) {
+func (db *postgresDatabase) GetNumberOfQueryTorrents(query string, epoch int64) (uint64, error) {
 
 	var querySkeleton = `SELECT COUNT(*)
 		FROM torrents
@@ -192,10 +192,10 @@ func (db *postgresDatabase) GetNumberOfQueryTorrents(query string, epoch int64) 
 	}
 
 	// If the database is empty (i.e. 0 entries in 'torrents') then the query will return nil.
-	if n == nil {
+	if n == nil || *n < 0 {
 		return 0, nil
 	} else {
-		return uint(*n), nil
+		return uint64(*n), nil
 	}
 }
 
@@ -222,10 +222,10 @@ func (db *postgresDatabase) QueryTorrents(
 			0
 		FROM torrents
 		WHERE
-			name ILIKE CONCAT('%',$1::text,'%') AND
+			($1::text = '' OR name ILIKE CONCAT('%',$1::text,'%')) AND
 			discovered_on <= $2 AND
-			{{.OrderOn}} {{GTEorLTE .Ascending}} $3 AND
-			id {{GTEorLTE .Ascending}} $4
+			($3 = 0 OR {{.OrderOn}} {{GTEorLTE .Ascending}} $3) AND
+			($4 = 0 OR id {{GTEorLTE .Ascending}} $4)
 		ORDER BY {{.OrderOn}} {{AscOrDesc .Ascending}}, id {{AscOrDesc .Ascending}}
 		LIMIT $5;
 	`
