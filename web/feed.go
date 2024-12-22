@@ -80,7 +80,7 @@ func feedHandler(w http.ResponseWriter, r *http.Request) {
 				Type string `xml:"type,attr"`
 			}{
 				URL: fmt.Sprintf(
-					"magnet:?xt=urn:btih:%s&amp;dn=%s",
+					"magnet:?xt=urn:btih:%s&dn=%s",
 					infohash,
 					torrent.Name,
 				),
